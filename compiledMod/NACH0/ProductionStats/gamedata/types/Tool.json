@@ -1,0 +1,11 @@
+{
+	"NACH0.Types.ProductionStats": {
+		"categories": [
+			"essential",
+			"aaa",
+			"NACH0"
+		],
+		"icon": "./../textures/icons/ProductionStats.png",
+		"isPlaceable" : false
+	}
+}

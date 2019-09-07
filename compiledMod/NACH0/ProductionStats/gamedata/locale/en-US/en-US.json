@@ -1,0 +1,8 @@
+{
+	"types": {
+		"NACH0.Types.ProductionStats": "Production Stats"
+	},
+	"typeuses": {
+		"NACH0.Types.ProductionStats": "left click to open UI, Displays item change"
+	}
+}

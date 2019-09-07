@@ -1,0 +1,10 @@
+[
+	{
+		"name": "NACH0.Player.ProductionStats",
+		"requires": [
+		],
+		"results": [{
+			"type": "NACH0.Types.ProductionStats"
+		}]
+	}
+]
