@@ -1,7 +1,7 @@
 [
   {
     "name": "NACH0.ProductionStats",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "namepretty": "NACH0's Production Stats",
     "enabled": true,
     "marksgamemodded": true,

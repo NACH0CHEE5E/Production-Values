@@ -172,11 +172,36 @@ namespace FoodGen
                 Label fivedays = new Label("No Data");
                 if (ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key].ContainsKey((day - 1).ToString()))
                 {
-                    yesterday = new Label((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()]).ToString());
+                    int amount = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()];
+                    if (amount >= 10000 || amount <= -10000)
+                        {
+                        amount = amount / 1000;
+                        yesterday = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                    }
+                    else
+                    {
+                        yesterday = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                    }
                 }
                 if (ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key].ContainsKey((day - 5).ToString()))
                 {
-                    fivedays = new Label((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()] / 5).ToString());
+                    //fivedays = new Label(((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 5).ToString()]) / 5).ToString());
+                    //int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 5).ToString()]) / 5;
+                    int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()];
+                    int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 2).ToString()];
+                    int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 2).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 3).ToString()];
+                    int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 3).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 4).ToString()];
+                    int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 4).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 5).ToString()];
+                    int amount = (currentfromyesterday + yesterdayfrom2days + _2daysfrom3days + _3daysfrom4days + _4daysfrom5days) / 5;
+                    if (amount >= 10000 || amount <= -10000)
+                    {
+                        amount = amount / 1000;
+                        fivedays = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                    }
+                    else
+                    {
+                        fivedays = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                    }
                 }
 
                 horizontalRowItems = new List<(IItem, int)>();
