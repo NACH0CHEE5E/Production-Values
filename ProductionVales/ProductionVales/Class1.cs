@@ -1,41 +1,35 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Pipliz;
-using Pipliz.JSON;
-using Recipes;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using Chatting;
 using Shared;
 using NetworkUI;
 using NetworkUI.Items;
+using UnityEngine;
 
-namespace FoodGen
+namespace ProductionValues
 {
     [ModLoader.ModManager]
-    class Class1
+    class ProductionValues
     {
-        public const string MOD_VERSION = "0.1.0";
-
-        public const string NAME = "NACH0";
-        public const string MODNAME = "ProductionStats";
-        public const string MODNAMESPACE = NAME + "." + MODNAME + ".";
+        public const string MODNAMESPACE = "NACH0.ProductionStats.";
 
         public static string GAMEDATA_FOLDER = @"";
         public static string GAME_SAVES = @"";
         public static string GAME_SAVEFILE = @"";
         public static string GAME_ROOT = @"";
-        public static string MOD_FOLDER = @"gamedata/mods/NACH0/Decor";
+        public static string MOD_FOLDER = @"";
 
         public static string FILE_NAME = "ProductionStats.json";
         public static string FILE_PATH = @"";
 
-        public static Dictionary<string, Dictionary<string, Dictionary<string, int>>> ProductionItems = new Dictionary<string, Dictionary<string, Dictionary<string, int>>>();
+        public static Dictionary<int, Dictionary<string, Dictionary<int, int>>> ProductionItems = new Dictionary<int, Dictionary<string, Dictionary<int, int>>>();
         //public static Dictionary<string, int> Settings = new Dictionary<string, int>();
         static bool WasDay = false;
-        static int day = 0;
+        //static int day = 0;
 
         [ModLoader.ModCallback(ModLoader.EModCallbackType.OnAssemblyLoaded, MODNAMESPACE + "OnAssemblyLoaded")]
         public static void OnAssemblyLoaded(string path)
@@ -58,7 +52,7 @@ namespace FoodGen
         [ModLoader.ModCallback(ModLoader.EModCallbackType.AfterWorldLoad, MODNAMESPACE + "AfterWorldLoad")]
         public static void AfterWorldLoad()
         {
-            day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
+            int day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
             if (TimeCycle.IsDay)
             {
                 WasDay = true;
@@ -66,15 +60,32 @@ namespace FoodGen
             if (!File.Exists(FILE_PATH))
             {
                 File.Create(FILE_PATH);
-                //FoodValues.Add("default", "0", 0)
-
             }
             else
             {
                 var FILE_CONTENTS = File.ReadAllText(FILE_PATH);
-                if (FILE_CONTENTS != "")
+                if (!FILE_CONTENTS.Equals(""))
                 {
-                    ProductionItems = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, Dictionary<string, int>>>>(FILE_CONTENTS);
+                    ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, Dictionary<int, int>>>>(FILE_CONTENTS);
+                    foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
+                    {
+                        List<int> keysToRemove = new List<int>();
+                        foreach (KeyValuePair<string, Dictionary<int, int>> dict in ProductionItems[colony.ColonyID])
+                        {
+                            foreach (KeyValuePair<int, int> type in ProductionItems[colony.ColonyID][dict.Key])
+                            {
+                                if (type.Key < day - 10)
+                                {
+                                    keysToRemove.Add(type.Key);
+                                }
+                            }
+                            foreach (int key in keysToRemove)
+                            {
+                                ProductionItems[colony.ColonyID][dict.Key].Remove(key);
+                            }
+
+                        }
+                    }
                 }
             }
         }
@@ -84,38 +95,26 @@ namespace FoodGen
             if (!WasDay && TimeCycle.IsDay)
             {
                 WasDay = true;
-                day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
+                int day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
                 return;
             }
             else if (WasDay && !TimeCycle.IsDay)
             {
-                day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
+                int day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
                 foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
                 {
-                    if (!ProductionItems.ContainsKey(colony.ColonyID.ToString()))
+                    if (!ProductionItems.ContainsKey(colony.ColonyID))
                     {
-                        ProductionItems[colony.ColonyID.ToString()] = new Dictionary<string, Dictionary<string, int>>();
+                        ProductionItems[colony.ColonyID] = new Dictionary<string, Dictionary<int, int>>();
                     }
-                    foreach (var type in ProductionItems[colony.ColonyID.ToString()])
+                    foreach (var type in ProductionItems[colony.ColonyID])
                     {
-                        ProductionItems[colony.ColonyID.ToString()][type.Key].Add(day.ToString(), colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0));
-                    }
-                    /*if (!FoodValues[colony.ColonyID.ToString()].ContainsKey(day.ToString()))
-                    {
-                        FoodValues[colony.ColonyID.ToString()].Add(day.ToString(), Pipliz.Math.RoundToInt(colony.Stockpile.TotalFood));
-                    }
-                    List<string> keysToRemove = new List<string>();
-                    foreach (var dict in FoodValues[colony.ColonyID.ToString()])
-                    {
-                        if (Int32.Parse(dict.Key) < day - 10)
+                        ProductionItems[colony.ColonyID][type.Key].Add(day, colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0));
+                        if (ProductionItems[colony.ColonyID][type.Key].ContainsKey(day - 11))
                         {
-                            keysToRemove.Add(dict.Key);
+                            ProductionItems[colony.ColonyID][type.Key].Remove(day - 11);
                         }
                     }
-                    foreach (var key in keysToRemove)
-                    {
-                        FoodValues[colony.ColonyID.ToString()].Remove(key);
-                    }*/
                 }
                 WasDay = false;
             }
@@ -137,7 +136,7 @@ namespace FoodGen
         [ModLoader.ModCallback(ModLoader.EModCallbackType.OnPlayerClicked, MODNAMESPACE + "OnPlayerClick")]
         public static void OnPlayerClicked(Players.Player player, PlayerClickedData data)
         {
-            if (data.TypeSelected == ItemTypes.GetType("NACH0.Types." + MODNAME).ItemIndex)
+            if (data.TypeSelected == ItemTypes.GetType("NACH0.Types.ProductionStats").ItemIndex)
             {
                 if (data.ClickType == PlayerClickedData.EClickType.Left)
                 {
@@ -147,99 +146,156 @@ namespace FoodGen
         }
         public static void SendUI(Players.Player player)
         {
-            day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
+            int day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
             NetworkMenu ProductionUI = new NetworkMenu();
             ProductionUI.Identifier = "ProductionUI";
             ProductionUI.LocalStorage.SetAs("header", "Production Stats");
-            ProductionUI.Width = 600;
-            ProductionUI.Height = 200;
+            ProductionUI.Width = 800;
+            ProductionUI.Height = 400;
 
             Label itemLabel = new Label("Item: ");
             Label changeFromYesterdayLabel = new Label("Change From Yesterday: ");
             Label changeFrom5DaysAgoLabel = new Label("Average Change per day over 5 days: ");
+            ButtonCallback addButton = new ButtonCallback(MODNAMESPACE + "AddType", new LabelData("Add", UnityEngine.Color.black, UnityEngine.TextAnchor.MiddleCenter));
             List<(IItem, int)> horizontalRowItems = new List<(IItem, int)>();
 
             horizontalRowItems.Add((itemLabel, 64));
             horizontalRowItems.Add((changeFromYesterdayLabel, 200));
-            horizontalRowItems.Add((changeFrom5DaysAgoLabel, 275));
+            horizontalRowItems.Add((changeFrom5DaysAgoLabel, 300));
+            horizontalRowItems.Add((addButton, 75));
             HorizontalRow horizontalRow = new HorizontalRow(horizontalRowItems);
             ProductionUI.Items.Add(horizontalRow);
 
-            foreach (var type in ProductionItems[player.ActiveColony.ColonyID.ToString()])
+            if (!player.ActiveColony.Equals(null) && ProductionItems.ContainsKey(player.ActiveColony.ColonyID))
             {
-                ItemIcon icon = new ItemIcon(type.Key);
-                Label yesterday = new Label("No Data");
-                Label fivedays = new Label("No Data");
-                if (ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key].ContainsKey((day - 1).ToString()))
+                foreach (var type in ProductionItems[player.ActiveColony.ColonyID])
                 {
-                    int amount = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()];
-                    if (amount >= 10000 || amount <= -10000)
+                    ItemIcon icon = new ItemIcon(type.Key);
+                    Label yesterday = new Label("No Data");
+                    Label fivedays = new Label("No Data");
+                    ButtonCallback removeButton = new ButtonCallback(MODNAMESPACE + "RemoveType." + type.Key, new LabelData("Remove", UnityEngine.Color.black, UnityEngine.TextAnchor.MiddleCenter));
+                    if (ProductionItems[player.ActiveColony.ColonyID][type.Key].ContainsKey((day - 1)))
+                    {
+                        int amount = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1)];
+                        if (amount >= 10000 || amount <= -10000)
                         {
-                        amount = amount / 1000;
-                        yesterday = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                            amount = amount / 1000;
+                            yesterday = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                        }
+                        else
+                        {
+                            yesterday = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                        }
                     }
-                    else
+                    if (ProductionItems[player.ActiveColony.ColonyID][type.Key].ContainsKey((day - 5)))
                     {
-                        yesterday = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                        //fivedays = new Label(((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5).ToString());
+                        //int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5;
+                        int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 1];
+                        int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 1] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 2];
+                        int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 2] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 3];
+                        int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 3] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 4];
+                        int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 4] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 5];
+                        int amount = (currentfromyesterday + yesterdayfrom2days + _2daysfrom3days + _3daysfrom4days + _4daysfrom5days) / 5;
+                        if (amount >= 10000 || amount <= -10000)
+                        {
+                            amount = amount / 1000;
+                            fivedays = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                        }
+                        else
+                        {
+                            fivedays = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                        }
                     }
-                }
-                if (ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key].ContainsKey((day - 5).ToString()))
-                {
-                    //fivedays = new Label(((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 5).ToString()]) / 5).ToString());
-                    //int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 5).ToString()]) / 5;
-                    int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()];
-                    int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 1).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 2).ToString()];
-                    int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 2).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 3).ToString()];
-                    int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 3).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 4).ToString()];
-                    int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 4).ToString()] - ProductionItems[player.ActiveColony.ColonyID.ToString()][type.Key][(day - 5).ToString()];
-                    int amount = (currentfromyesterday + yesterdayfrom2days + _2daysfrom3days + _3daysfrom4days + _4daysfrom5days) / 5;
-                    if (amount >= 10000 || amount <= -10000)
-                    {
-                        amount = amount / 1000;
-                        fivedays = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
-                    }
-                    else
-                    {
-                        fivedays = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
-                    }
-                }
 
-                horizontalRowItems = new List<(IItem, int)>();
+                    horizontalRowItems = new List<(IItem, int)>();
 
-                horizontalRowItems.Add((icon, 64));
-                horizontalRowItems.Add((yesterday, 200));
-                horizontalRowItems.Add((fivedays, 275));
-                horizontalRow = new HorizontalRow(horizontalRowItems);
-                ProductionUI.Items.Add(horizontalRow);
+                    horizontalRowItems.Add((icon, 64));
+                    horizontalRowItems.Add((yesterday, 200));
+                    horizontalRowItems.Add((fivedays, 300));
+                    horizontalRowItems.Add((removeButton, 75));
+                    horizontalRow = new HorizontalRow(horizontalRowItems);
+                    ProductionUI.Items.Add(horizontalRow);
+                }
             }
 
             NetworkMenuManager.SendServerPopup(player, ProductionUI);
         }
+
+        [ModLoader.ModCallback(ModLoader.EModCallbackType.OnPlayerPushedNetworkUIButton, MODNAMESPACE + "onButtonPushed")]
+        public static void onButtonPushed(ButtonPressCallbackData data)
+        {
+            if (!data.ButtonIdentifier.StartsWith(MODNAMESPACE))
+            {
+                return;
+            }
+            data.ButtonIdentifier = data.ButtonIdentifier.Remove(0, 22);
+            if (data.ButtonIdentifier.StartsWith("RemoveType"))
+            {
+                data.ButtonIdentifier = data.ButtonIdentifier.Remove(0, 11);
+                if (ProductionItems[data.Player.ActiveColony.ColonyID].ContainsKey(data.ButtonIdentifier))
+                {
+                    ProductionItems[data.Player.ActiveColony.ColonyID].Remove(data.ButtonIdentifier);
+                    Chat.Send(data.Player, "<color=yellow>" + data.ButtonIdentifier + " has been removed</color>");
+                    SendUI(data.Player);
+                    return;
+                }
+                Chat.Send(data.Player, "<color=yellow>" + data.ButtonIdentifier + " was not being recorded, could not remove</color>");
+            }
+            else if (data.ButtonIdentifier.StartsWith("AddType"))
+            {
+                string typeName = ItemTypes.GetType(data.Player.Inventory.Items[0].Type).Name;
+                if (!ProductionItems[data.Player.ActiveColony.ColonyID].ContainsKey(typeName))
+                {
+                    ProductionItems[data.Player.ActiveColony.ColonyID][typeName] = new Dictionary<int, int>();
+                    Chat.Send(data.Player, "<color=yellow>Added " + typeName + " to production chain will take 5 ingame days to see all data</color>");
+                    SendUI(data.Player);
+                    return;
+                }
+                Chat.Send(data.Player, "<color=yellow>" + typeName + " is already being recorded</color>");
+            }
+        }
+
         [ChatCommandAutoLoader]
         public class AddTypesCommand : IChatCommand
         {
             public bool TryDoCommand(Players.Player player, string chat, List<string> splits)
             {
-                //ServerLog.LogAsyncMessage(new LogMessage("Command Imput: " + chat, LogType.Log));
-                if (player == null)
+                if (player.Equals(null))
                 {
                     return false;
                 }
+                chat.ToLower();
                 if (chat.StartsWith("/production"))
                 {
-                    var inventorySlot1 = player.Inventory.Items[0];
-                    var typeName = ItemTypes.GetType(inventorySlot1.Type);
-                    if (!ProductionItems.ContainsKey(player.ActiveColony.ColonyID.ToString()))
+                    string typeName = ItemTypes.GetType(player.Inventory.Items[0].Type).Name;
+                    chat = chat.Remove(0, 12);
+                    if (!ProductionItems.ContainsKey(player.ActiveColony.ColonyID))
                     {
-                        ProductionItems[player.ActiveColony.ColonyID.ToString()] = new Dictionary<string, Dictionary<string, int>>();
+                        ProductionItems[player.ActiveColony.ColonyID] = new Dictionary<string, Dictionary<int, int>>();
                     }
-                    if (!ProductionItems[player.ActiveColony.ColonyID.ToString()].ContainsKey(typeName.Name))
+                    if (chat.StartsWith("add"))
                     {
-                        ProductionItems[player.ActiveColony.ColonyID.ToString()][typeName.Name] = new Dictionary<string, int>();
-                        return true;
+                        if (!ProductionItems[player.ActiveColony.ColonyID].ContainsKey(typeName))
+                        {
+                            ProductionItems[player.ActiveColony.ColonyID][typeName] = new Dictionary<int, int>();
+                            Chat.Send(player, "<color=yellow>Added " + typeName + " to production chain will take 5 ingame days to see all data</color>");
+                            return true;
+                        }
+                        Chat.Send(player, "<color=yellow>" + typeName + " is already being recorded</color>");
+                    }
+                    else if (chat.StartsWith("remove"))
+                    {
+                        if (ProductionItems[player.ActiveColony.ColonyID].ContainsKey(typeName))
+                        {
+                            ProductionItems[player.ActiveColony.ColonyID].Remove(typeName);
+                            Chat.Send(player, "<color=yellow>" + typeName + " has been removed</color>");
+                            return true;
+                        }
+                        Chat.Send(player, "<color=yellow>" + typeName + " was not being recorded, could not remove</color>");
                     }
                 }
-                return false;
+                return true;
             }
 
         }
