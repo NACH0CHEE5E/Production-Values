@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Pipliz;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,7 +7,6 @@ using Chatting;
 using Shared;
 using NetworkUI;
 using NetworkUI.Items;
-using UnityEngine;
 
 namespace ProductionValues
 {
@@ -17,21 +15,21 @@ namespace ProductionValues
     {
         public const string MODNAMESPACE = "NACH0.ProductionStats.";
 
-        public static string GAMEDATA_FOLDER = @"";
+        /*public static string GAMEDATA_FOLDER = @"";
         public static string GAME_SAVES = @"";
         public static string GAME_SAVEFILE = @"";
         public static string GAME_ROOT = @"";
         public static string MOD_FOLDER = @"";
 
-        public static string FILE_NAME = "ProductionStats.json";
-        public static string FILE_PATH = @"";
+        public static string FILE_NAME = "ProductionStats.json";*/
+        public static string FILE_PATH;
 
         public static Dictionary<int, Dictionary<string, Dictionary<int, int>>> ProductionItems = new Dictionary<int, Dictionary<string, Dictionary<int, int>>>();
         //public static Dictionary<string, int> Settings = new Dictionary<string, int>();
         static bool WasDay = false;
         //static int day = 0;
 
-        [ModLoader.ModCallback(ModLoader.EModCallbackType.OnAssemblyLoaded, MODNAMESPACE + "OnAssemblyLoaded")]
+        /*[ModLoader.ModCallback(ModLoader.EModCallbackType.OnAssemblyLoaded, MODNAMESPACE + "OnAssemblyLoaded")]
         public static void OnAssemblyLoaded(string path)
         {
             MOD_FOLDER = Path.GetDirectoryName(path) + "/";
@@ -39,14 +37,14 @@ namespace ProductionValues
             GAME_ROOT = path.Substring(0, path.IndexOf("gamedata")).Replace("\\", "/") + "/";
             GAMEDATA_FOLDER = path.Substring(0, path.IndexOf("gamedata") + "gamedata".Length).Replace("\\", "/") + "/";
             GAME_SAVES = GAMEDATA_FOLDER + "savegames/";
-        }
+        }*/
 
         [ModLoader.ModCallback(ModLoader.EModCallbackType.AfterSelectedWorld, MODNAMESPACE + "AfterSelectedWorld")]
         public static void AfterSelectedWorld()
         {
-            GAME_SAVEFILE = GAME_SAVES + ServerManager.WorldName + "/";
-            FILE_PATH = GAME_SAVEFILE + FILE_NAME;
-
+            //GAME_SAVEFILE = GAME_SAVES + ServerManager.WorldName + "/";
+            //FILE_PATH = GAME_SAVEFILE + FILE_NAME;
+            FILE_PATH = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.json";
         }
 
         [ModLoader.ModCallback(ModLoader.EModCallbackType.AfterWorldLoad, MODNAMESPACE + "AfterWorldLoad")]
@@ -124,14 +122,12 @@ namespace ProductionValues
         {
             var fileContnets = JsonConvert.SerializeObject(ProductionItems, Formatting.Indented);
             File.WriteAllText(FILE_PATH, fileContnets);
-            return;
         }
         [ModLoader.ModCallback(ModLoader.EModCallbackType.OnSaveWorldMisc, MODNAMESPACE + "OnSaveWorldMisc")]
         public static void OnSaveWorldMisc(JObject j)
         {
             var fileContnets = JsonConvert.SerializeObject(ProductionItems, Formatting.Indented);
             File.WriteAllText(FILE_PATH, fileContnets);
-            return;
         }
         [ModLoader.ModCallback(ModLoader.EModCallbackType.OnPlayerClicked, MODNAMESPACE + "OnPlayerClick")]
         public static void OnPlayerClicked(Players.Player player, PlayerClickedData data)
