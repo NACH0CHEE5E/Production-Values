@@ -14,6 +14,7 @@ namespace ProductionValues
     class ProductionValues
     {
         public const string MODNAMESPACE = "NACH0.ProductionStats.";
+        public static string version = "0.3.0";
 
         /*public static string GAMEDATA_FOLDER = @"";
         public static string GAME_SAVES = @"";
@@ -24,7 +25,7 @@ namespace ProductionValues
         public static string FILE_NAME = "ProductionStats.json";*/
         public static string FILE_PATH;
 
-        public static Dictionary<int, Dictionary<string, Dictionary<int, int>>> ProductionItems = new Dictionary<int, Dictionary<string, Dictionary<int, int>>>();
+        public static Dictionary<int, Dictionary<string, int[]>> ProductionItems = new Dictionary<int, Dictionary<string, int[]>>();
         //public static Dictionary<string, int> Settings = new Dictionary<string, int>();
         static bool WasDay = false;
         //static int day = 0;
@@ -39,13 +40,13 @@ namespace ProductionValues
             GAME_SAVES = GAMEDATA_FOLDER + "savegames/";
         }*/
 
-        [ModLoader.ModCallback(ModLoader.EModCallbackType.AfterSelectedWorld, MODNAMESPACE + "AfterSelectedWorld")]
+        /*[ModLoader.ModCallback(ModLoader.EModCallbackType.AfterSelectedWorld, MODNAMESPACE + "AfterSelectedWorld")]
         public static void AfterSelectedWorld()
         {
             //GAME_SAVEFILE = GAME_SAVES + ServerManager.WorldName + "/";
             //FILE_PATH = GAME_SAVEFILE + FILE_NAME;
             FILE_PATH = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.json";
-        }
+        }*/
 
         [ModLoader.ModCallback(ModLoader.EModCallbackType.AfterWorldLoad, MODNAMESPACE + "AfterWorldLoad")]
         public static void AfterWorldLoad()
@@ -55,6 +56,7 @@ namespace ProductionValues
             {
                 WasDay = true;
             }
+            FILE_PATH = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.json";
             if (!File.Exists(FILE_PATH))
             {
                 File.Create(FILE_PATH);
@@ -62,29 +64,60 @@ namespace ProductionValues
             else
             {
                 var FILE_CONTENTS = File.ReadAllText(FILE_PATH);
-                if (!FILE_CONTENTS.Equals(""))
+                if (FILE_CONTENTS.Equals(""))
                 {
-                    ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, Dictionary<int, int>>>>(FILE_CONTENTS);
+                    return;
+                }
+                string versionFilePath = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionLastVersion.txt";
+                if (!File.Exists(versionFilePath))
+                {
+                    Dictionary<int, Dictionary<string, Dictionary<int, int>>> oldProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, Dictionary<int, int>>>>(FILE_CONTENTS);
                     foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
                     {
-                        List<int> keysToRemove = new List<int>();
-                        foreach (KeyValuePair<string, Dictionary<int, int>> dict in ProductionItems[colony.ColonyID])
+                        if (oldProductionItems.ContainsKey(colony.ColonyID))
                         {
-                            foreach (KeyValuePair<int, int> type in ProductionItems[colony.ColonyID][dict.Key])
+                            foreach (var type in oldProductionItems[colony.ColonyID])
                             {
-                                if (type.Key < day - 10)
+                                if (!ProductionItems.ContainsKey(colony.ColonyID))
                                 {
-                                    keysToRemove.Add(type.Key);
+                                    ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
+                                }
+                                if (!ProductionItems[colony.ColonyID].ContainsKey(type.Key))
+                                {
+                                    ProductionItems[colony.ColonyID][type.Key] = new int[10];
                                 }
                             }
-                            foreach (int key in keysToRemove)
-                            {
-                                ProductionItems[colony.ColonyID][dict.Key].Remove(key);
-                            }
-
                         }
                     }
+                    File.Create(versionFilePath);
+                    File.WriteAllText(versionFilePath, version);
+                    return;
                 }
+                ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, int[]>>>(FILE_CONTENTS);
+                File.WriteAllText(versionFilePath, version);
+
+
+                //ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, int[]>>>(FILE_CONTENTS);
+                /*foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
+                {
+                    List<int> keysToRemove = new List<int>();
+                    foreach (KeyValuePair<string, int[]> dict in ProductionItems[colony.ColonyID])
+                    {
+                        foreach (KeyValuePair<int, int> type in ProductionItems[colony.ColonyID][dict.Key])
+                        {
+                            if (type.Key < day - 10)
+                            {
+                                keysToRemove.Add(type.Key);
+                            }
+                        }
+                        foreach (int key in keysToRemove)
+                        {
+                            ProductionItems[colony.ColonyID][dict.Key].Remove(key);
+                        }
+
+                    }
+                }*/
+
             }
         }
         [ModLoader.ModCallback(ModLoader.EModCallbackType.OnUpdate, MODNAMESPACE + "OnUpdate")]
@@ -93,7 +126,7 @@ namespace ProductionValues
             if (!WasDay && TimeCycle.IsDay)
             {
                 WasDay = true;
-                int day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
+                //int day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
                 return;
             }
             else if (WasDay && !TimeCycle.IsDay)
@@ -103,15 +136,20 @@ namespace ProductionValues
                 {
                     if (!ProductionItems.ContainsKey(colony.ColonyID))
                     {
-                        ProductionItems[colony.ColonyID] = new Dictionary<string, Dictionary<int, int>>();
+                        ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
                     }
                     foreach (var type in ProductionItems[colony.ColonyID])
                     {
-                        ProductionItems[colony.ColonyID][type.Key].Add(day, colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0));
-                        if (ProductionItems[colony.ColonyID][type.Key].ContainsKey(day - 11))
+                        //ProductionItems[colony.ColonyID][type.Key].Add(day, colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0));
+                        /*if (ProductionItems[colony.ColonyID][type.Key].ContainsKey(day - 11))
                         {
                             ProductionItems[colony.ColonyID][type.Key].Remove(day - 11);
+                        }*/
+                        if (ProductionItems[colony.ColonyID][type.Key].Equals(null))
+                        {
+                            ProductionItems[colony.ColonyID][type.Key] = new int[10];
                         }
+                        ProductionItems[colony.ColonyID][type.Key][day % 10] = colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0);
                     }
                 }
                 WasDay = false;
@@ -170,9 +208,9 @@ namespace ProductionValues
                     Label yesterday = new Label("No Data");
                     Label fivedays = new Label("No Data");
                     ButtonCallback removeButton = new ButtonCallback(MODNAMESPACE + "RemoveType." + type.Key, new LabelData("Remove", UnityEngine.Color.black, UnityEngine.TextAnchor.MiddleCenter));
-                    if (ProductionItems[player.ActiveColony.ColonyID][type.Key].ContainsKey((day - 1)))
+                    if (!ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10].Equals(null))
                     {
-                        int amount = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1)];
+                        int amount = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10];
                         if (amount >= 10000 || amount <= -10000)
                         {
                             amount = amount / 1000;
@@ -183,15 +221,15 @@ namespace ProductionValues
                             yesterday = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
                         }
                     }
-                    if (ProductionItems[player.ActiveColony.ColonyID][type.Key].ContainsKey((day - 5)))
+                    if (!ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5) % 10].Equals(null))
                     {
                         //fivedays = new Label(((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5).ToString());
                         //int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5;
-                        int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 1];
-                        int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 1] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 2];
-                        int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 2] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 3];
-                        int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 3] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 4];
-                        int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 4] - ProductionItems[player.ActiveColony.ColonyID][type.Key][day - 5];
+                        int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10];
+                        int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 2) % 10];
+                        int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 2) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 3) % 10];
+                        int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 3) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 4) % 10];
+                        int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 4) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5) % 10];
                         int amount = (currentfromyesterday + yesterdayfrom2days + _2daysfrom3days + _3daysfrom4days + _4daysfrom5days) / 5;
                         if (amount >= 10000 || amount <= -10000)
                         {
@@ -243,7 +281,7 @@ namespace ProductionValues
                 string typeName = ItemTypes.GetType(data.Player.Inventory.Items[0].Type).Name;
                 if (!ProductionItems[data.Player.ActiveColony.ColonyID].ContainsKey(typeName))
                 {
-                    ProductionItems[data.Player.ActiveColony.ColonyID][typeName] = new Dictionary<int, int>();
+                    ProductionItems[data.Player.ActiveColony.ColonyID][typeName] = new int[10];
                     Chat.Send(data.Player, "<color=yellow>Added " + typeName + " to production chain will take 5 ingame days to see all data</color>");
                     SendUI(data.Player);
                     return;
@@ -268,13 +306,13 @@ namespace ProductionValues
                     chat = chat.Remove(0, 12);
                     if (!ProductionItems.ContainsKey(player.ActiveColony.ColonyID))
                     {
-                        ProductionItems[player.ActiveColony.ColonyID] = new Dictionary<string, Dictionary<int, int>>();
+                        ProductionItems[player.ActiveColony.ColonyID] = new Dictionary<string, int[]>();
                     }
                     if (chat.StartsWith("add"))
                     {
                         if (!ProductionItems[player.ActiveColony.ColonyID].ContainsKey(typeName))
                         {
-                            ProductionItems[player.ActiveColony.ColonyID][typeName] = new Dictionary<int, int>();
+                            ProductionItems[player.ActiveColony.ColonyID][typeName] = new int[10];
                             Chat.Send(player, "<color=yellow>Added " + typeName + " to production chain will take 5 ingame days to see all data</color>");
                             return true;
                         }
