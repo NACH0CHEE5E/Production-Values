@@ -279,6 +279,7 @@ namespace ProductionValues
                             return true;
                         }
                         Chat.Send(player, "<color=yellow>" + typeName + " is already being recorded</color>");
+                        return true;
                     }
                     else if (chat.StartsWith("remove"))
                     {
@@ -289,9 +290,10 @@ namespace ProductionValues
                             return true;
                         }
                         Chat.Send(player, "<color=yellow>" + typeName + " was not being recorded, could not remove</color>");
+                        return true;
                     }
                 }
-                return true;
+                return false;
             }
 
         }
