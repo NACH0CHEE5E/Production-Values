@@ -7,6 +7,7 @@ using Chatting;
 using Shared;
 using NetworkUI;
 using NetworkUI.Items;
+using System.Linq;
 
 namespace ProductionValues
 {
@@ -14,7 +15,8 @@ namespace ProductionValues
     class ProductionValues
     {
         public const string MODNAMESPACE = "NACH0.ProductionStats.";
-        public static string version = "0.3.0";
+        //public static string version = "0.3.0";
+        //public static string oldVersion = "";
 
         /*public static string GAMEDATA_FOLDER = @"";
         public static string GAME_SAVES = @"";
@@ -33,92 +35,200 @@ namespace ProductionValues
         /*[ModLoader.ModCallback(ModLoader.EModCallbackType.OnAssemblyLoaded, MODNAMESPACE + "OnAssemblyLoaded")]
         public static void OnAssemblyLoaded(string path)
         {
-            MOD_FOLDER = Path.GetDirectoryName(path) + "/";
-
-            GAME_ROOT = path.Substring(0, path.IndexOf("gamedata")).Replace("\\", "/") + "/";
-            GAMEDATA_FOLDER = path.Substring(0, path.IndexOf("gamedata") + "gamedata".Length).Replace("\\", "/") + "/";
-            GAME_SAVES = GAMEDATA_FOLDER + "savegames/";
+            
         }*/
 
         /*[ModLoader.ModCallback(ModLoader.EModCallbackType.AfterSelectedWorld, MODNAMESPACE + "AfterSelectedWorld")]
         public static void AfterSelectedWorld()
         {
-            //GAME_SAVEFILE = GAME_SAVES + ServerManager.WorldName + "/";
-            //FILE_PATH = GAME_SAVEFILE + FILE_NAME;
-            FILE_PATH = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.json";
-        }*/
+            //get current mod version
+            string file = "./gamedata/mods/NACH0/ProductionStats/modInfo.json";
+            string version = File.ReadLines(file).Skip(3).Take(1).First();
+            version = version.Replace("    \"version\": \"", "");
+            version = version.Remove(5);
 
-        [ModLoader.ModCallback(ModLoader.EModCallbackType.AfterWorldLoad, MODNAMESPACE + "AfterWorldLoad")]
-        public static void AfterWorldLoad()
-        {
-            int day = Pipliz.Math.RoundToInt(System.Math.Floor(TimeCycle.TotalHours / 24));
-            if (TimeCycle.IsDay)
+            //get old version
+            string oldVersion = "0.0.0";
+            file = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.Version";
+            if (File.Exists(file))
             {
-                WasDay = true;
+                oldVersion = File.ReadAllText(file);
             }
+            else
+            {
+                File.WriteAllText(file, version);
+            }
+
+            //read production stats file
             FILE_PATH = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.json";
             if (!File.Exists(FILE_PATH))
             {
                 File.Create(FILE_PATH);
             }
-            else
+            var FILE_CONTENTS = File.ReadAllText(FILE_PATH);
+
+            //will terminate if empty
+            if (FILE_CONTENTS.Equals(""))
             {
-                var FILE_CONTENTS = File.ReadAllText(FILE_PATH);
-                if (FILE_CONTENTS.Equals(""))
+                return;
+            }
+
+            //if mod version is less than 0.3.0
+            if (Int32.Parse(oldVersion.Substring(2, 1)) < 3)
+            {
+                Dictionary<int, Dictionary<string, Dictionary<int, int>>> oldProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, Dictionary<int, int>>>>(FILE_CONTENTS);
+                foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
                 {
-                    return;
+                    
+                    if (oldProductionItems.ContainsKey(colony.ColonyID))
+                    {
+                        ProductionItems[colony.ColonyID]["_calories"] = new int[10];
+                        foreach (var type in oldProductionItems[colony.ColonyID])
+                        {
+                            if (!ProductionItems.ContainsKey(colony.ColonyID))
+                            {
+                                ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
+                            }
+                            if (!ProductionItems[colony.ColonyID].ContainsKey(type.Key))
+                            {
+                                ProductionItems[colony.ColonyID][type.Key] = new int[10];
+                                foreach (var value in oldProductionItems[colony.ColonyID][type.Key])
+                                {
+                                    ProductionItems[colony.ColonyID][type.Key][value.Key % 10] = value.Value;
+                                }
+                            }
+                        }
+                    }
                 }
-                string versionFilePath = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionLastVersion.txt";
-                if (!File.Exists(versionFilePath))
+                string foodgenfile = "./gamedata/savegames/" + ServerManager.WorldName + "/FoodGen.json";
+                if (File.Exists(foodgenfile))
                 {
-                    Dictionary<int, Dictionary<string, Dictionary<int, int>>> oldProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, Dictionary<int, int>>>>(FILE_CONTENTS);
+                    Dictionary<string, Dictionary<string, int>> food = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, int>>>(File.ReadAllText(foodgenfile));
                     foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
                     {
-                        if (oldProductionItems.ContainsKey(colony.ColonyID))
+                        if (food.ContainsKey(colony.ColonyID.ToString()))
                         {
-                            foreach (var type in oldProductionItems[colony.ColonyID])
+                            if (!ProductionItems.ContainsKey(colony.ColonyID))
                             {
-                                if (!ProductionItems.ContainsKey(colony.ColonyID))
+                                ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
+                            }
+                            if (!ProductionItems[colony.ColonyID].ContainsKey("_calories"))
+                            {
+                                ProductionItems[colony.ColonyID]["_calories"] = new int[10];
+                                foreach (var value in food[colony.ColonyID.ToString()])
                                 {
-                                    ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
-                                }
-                                if (!ProductionItems[colony.ColonyID].ContainsKey(type.Key))
-                                {
-                                    ProductionItems[colony.ColonyID][type.Key] = new int[10];
+                                    ProductionItems[colony.ColonyID]["_calories"][Int32.Parse(value.Key) % 10] = value.Value;
                                 }
                             }
                         }
                     }
-                    File.Create(versionFilePath);
-                    File.WriteAllText(versionFilePath, version);
-                    return;
+
                 }
-                ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, int[]>>>(FILE_CONTENTS);
-                File.WriteAllText(versionFilePath, version);
+                return;
+            }
+
+            //else
+            ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, int[]>>>(FILE_CONTENTS);
+        }*/
+
+        [ModLoader.ModCallback(ModLoader.EModCallbackType.AfterWorldLoad, MODNAMESPACE + "AfterWorldLoad")]
+        public static void AfterWorldLoad()
+        {
+            if (TimeCycle.IsDay)
+            {
+                WasDay = true;
+            }
+
+            //get current mod version
+            string file = "./gamedata/mods/NACH0/ProductionStats/modInfo.json";
+            string version = File.ReadLines(file).Skip(3).Take(1).First();
+            version = version.Replace("    \"version\": \"", "");
+            version = version.Remove(5);
+
+            //get old version
+            string oldVersion = "0.0.0";
+            file = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.Version";
+            if (File.Exists(file))
+            {
+                oldVersion = File.ReadAllText(file);
+            }
+            File.WriteAllText(file, version);
+
+            //read production stats file
+            FILE_PATH = "./gamedata/savegames/" + ServerManager.WorldName + "/ProductionStats.json";
+            if (!File.Exists(FILE_PATH))
+            {
+                File.Create(FILE_PATH);
+            }
+            var FILE_CONTENTS = File.ReadAllText(FILE_PATH);
 
 
-                //ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, int[]>>>(FILE_CONTENTS);
-                /*foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
+            //will terminate if empty
+            if (FILE_CONTENTS.Equals(""))
+            {
+                return;
+            }
+
+            //if mod version was less than 0.3.0
+            if (Int32.Parse(oldVersion.Substring(2, 1)) < 3)
+            {
+                Dictionary<int, Dictionary<string, Dictionary<int, int>>> oldProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, Dictionary<int, int>>>>(FILE_CONTENTS);
+                foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
                 {
-                    List<int> keysToRemove = new List<int>();
-                    foreach (KeyValuePair<string, int[]> dict in ProductionItems[colony.ColonyID])
+                    if (!ProductionItems.ContainsKey(colony.ColonyID))
                     {
-                        foreach (KeyValuePair<int, int> type in ProductionItems[colony.ColonyID][dict.Key])
+                        ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
+                    }
+                    if (oldProductionItems.ContainsKey(colony.ColonyID))
+                    {
+                        foreach (var type in oldProductionItems[colony.ColonyID])
                         {
-                            if (type.Key < day - 10)
+                            if (!ProductionItems[colony.ColonyID].ContainsKey(type.Key))
                             {
-                                keysToRemove.Add(type.Key);
+                                ProductionItems[colony.ColonyID][type.Key] = new int[10];
+                                foreach (var value in oldProductionItems[colony.ColonyID][type.Key])
+                                {
+                                    ProductionItems[colony.ColonyID][type.Key][value.Key % 10] = value.Value;
+                                }
                             }
                         }
-                        foreach (int key in keysToRemove)
-                        {
-                            ProductionItems[colony.ColonyID][dict.Key].Remove(key);
-                        }
-
                     }
-                }*/
-
+                }
+                string foodgenfile = "./gamedata/savegames/" + ServerManager.WorldName + "/FoodGen.json";
+                if (File.Exists(foodgenfile))
+                {
+                    Dictionary<int, Dictionary<int, int>> food = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<int, int>>>(File.ReadAllText(foodgenfile));
+                    foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
+                    {
+                        if (food.ContainsKey(colony.ColonyID))
+                        {
+                            if (!ProductionItems.ContainsKey(colony.ColonyID))
+                            {
+                                ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
+                            }
+                            if (!ProductionItems[colony.ColonyID].ContainsKey("_calories"))
+                            {
+                                ProductionItems[colony.ColonyID]["_calories"] = new int[10];
+                                foreach (var value in food[colony.ColonyID])
+                                {
+                                    ProductionItems[colony.ColonyID]["_calories"][value.Key % 10] = value.Value;
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (Colony colony in ServerManager.ColonyTracker.ColoniesByID.Values)
+                    {
+                        ProductionItems[colony.ColonyID]["_calories"] = new int[10];
+                    }
+                }
+                return;
             }
+
+            //else
+            ProductionItems = JsonConvert.DeserializeObject<Dictionary<int, Dictionary<string, int[]>>>(FILE_CONTENTS);
         }
         [ModLoader.ModCallback(ModLoader.EModCallbackType.OnUpdate, MODNAMESPACE + "OnUpdate")]
         public static void OnUpdate()
@@ -138,18 +248,34 @@ namespace ProductionValues
                     {
                         ProductionItems[colony.ColonyID] = new Dictionary<string, int[]>();
                     }
+                    if (!ProductionItems[colony.ColonyID].ContainsKey("_calories"))
+                    {
+                        ProductionItems[colony.ColonyID]["_calories"] = new int[10];
+                    }
                     foreach (var type in ProductionItems[colony.ColonyID])
                     {
+                        if (type.Key.Equals("_calories"))
+                        {
+                            if (ProductionItems[colony.ColonyID]["_calories"].Equals(null))
+                            {
+                                ProductionItems[colony.ColonyID]["_calories"] = new int[10];
+                            }
+                            ProductionItems[colony.ColonyID]["_calories"][day % 10] = Pipliz.Math.RoundToInt(colony.Stockpile.TotalFood);
+                        }
+                        else
+                        {
+                            if (ProductionItems[colony.ColonyID][type.Key].Equals(null))
+                            {
+                                ProductionItems[colony.ColonyID][type.Key] = new int[10];
+                            }
+                            ProductionItems[colony.ColonyID][type.Key][day % 10] = colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0);
+                        }
                         //ProductionItems[colony.ColonyID][type.Key].Add(day, colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0));
                         /*if (ProductionItems[colony.ColonyID][type.Key].ContainsKey(day - 11))
                         {
                             ProductionItems[colony.ColonyID][type.Key].Remove(day - 11);
                         }*/
-                        if (ProductionItems[colony.ColonyID][type.Key].Equals(null))
-                        {
-                            ProductionItems[colony.ColonyID][type.Key] = new int[10];
-                        }
-                        ProductionItems[colony.ColonyID][type.Key][day % 10] = colony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0);
+
                     }
                 }
                 WasDay = false;
@@ -202,54 +328,102 @@ namespace ProductionValues
 
             if (!player.ActiveColony.Equals(null) && ProductionItems.ContainsKey(player.ActiveColony.ColonyID))
             {
-                foreach (var type in ProductionItems[player.ActiveColony.ColonyID])
+                if (ProductionItems[player.ActiveColony.ColonyID].ContainsKey("_calories"))
                 {
-                    ItemIcon icon = new ItemIcon(type.Key);
+                    Label calories = new Label("Calories:");
                     Label yesterday = new Label("No Data");
                     Label fivedays = new Label("No Data");
-                    ButtonCallback removeButton = new ButtonCallback(MODNAMESPACE + "RemoveType." + type.Key, new LabelData("Remove", UnityEngine.Color.black, UnityEngine.TextAnchor.MiddleCenter));
-                    if (!ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10].Equals(null))
+                    if (!ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 1) % 10].Equals(null))
                     {
-                        int amount = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10];
+                        int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType("_calories").ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 1) % 10]) * 2000;
                         if (amount >= 10000 || amount <= -10000)
                         {
                             amount = amount / 1000;
-                            yesterday = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                            yesterday = new Label(String.Format("{0:n0}", amount) + "K  Calories");
                         }
                         else
                         {
-                            yesterday = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                            yesterday = new Label(String.Format("{0:n0}", amount) + "  Calories");
                         }
                     }
-                    if (!ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5) % 10].Equals(null))
+                    if (!ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 5) % 10].Equals(null))
                     {
-                        //fivedays = new Label(((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5).ToString());
-                        //int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5;
-                        int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10];
-                        int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 2) % 10];
-                        int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 2) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 3) % 10];
-                        int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 3) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 4) % 10];
-                        int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 4) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5) % 10];
-                        int amount = (currentfromyesterday + yesterdayfrom2days + _2daysfrom3days + _3daysfrom4days + _4daysfrom5days) / 5;
+                        int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType("_calories").ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 1) % 10];
+                        int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 1) % 10] - ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 2) % 10];
+                        int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 2) % 10] - ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 3) % 10];
+                        int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 3) % 10] - ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 4) % 10];
+                        int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 4) % 10] - ProductionItems[player.ActiveColony.ColonyID]["_calories"][(day - 5) % 10];
+                        int amount = ((currentfromyesterday + yesterdayfrom2days + _2daysfrom3days + _3daysfrom4days + _4daysfrom5days) / 5) * 2000;
                         if (amount >= 10000 || amount <= -10000)
                         {
                             amount = amount / 1000;
-                            fivedays = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                            fivedays = new Label(String.Format("{0:n0}", amount) + "K  Calories");
                         }
                         else
                         {
-                            fivedays = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                            fivedays = new Label(String.Format("{0:n0}", amount) + " Calories");
                         }
                     }
 
                     horizontalRowItems = new List<(IItem, int)>();
 
-                    horizontalRowItems.Add((icon, 64));
+                    horizontalRowItems.Add((calories, 64));
                     horizontalRowItems.Add((yesterday, 200));
                     horizontalRowItems.Add((fivedays, 300));
-                    horizontalRowItems.Add((removeButton, 75));
                     horizontalRow = new HorizontalRow(horizontalRowItems);
                     ProductionUI.Items.Add(horizontalRow);
+                }
+                foreach (var type in ProductionItems[player.ActiveColony.ColonyID])
+                {
+                    if (!type.Key.Equals("_calories"))
+                    {
+                        ItemIcon icon = new ItemIcon(type.Key);
+                        Label yesterday = new Label("No Data");
+                        Label fivedays = new Label("No Data");
+                        ButtonCallback removeButton = new ButtonCallback(MODNAMESPACE + "RemoveType." + type.Key, new LabelData("Remove", UnityEngine.Color.black, UnityEngine.TextAnchor.MiddleCenter));
+                        if (!ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10].Equals(null))
+                        {
+                            int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10]) * 2000;
+                            if (amount >= 10000 || amount <= -10000)
+                            {
+                                amount = amount / 1000;
+                                yesterday = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                            }
+                            else
+                            {
+                                yesterday = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                            }
+                        }
+                        if (!ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5) % 10].Equals(null))
+                        {
+                            //fivedays = new Label(((player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5).ToString());
+                            //int amount = (player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5).ToString()]) / 5;
+                            int currentfromyesterday = player.ActiveColony.Stockpile.Items.GetValueOrDefault(ItemTypes.GetType(type.Key).ItemIndex, 0) - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10];
+                            int yesterdayfrom2days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 1) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 2) % 10];
+                            int _2daysfrom3days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 2) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 3) % 10];
+                            int _3daysfrom4days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 3) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 4) % 10];
+                            int _4daysfrom5days = ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 4) % 10] - ProductionItems[player.ActiveColony.ColonyID][type.Key][(day - 5) % 10];
+                            int amount = ((currentfromyesterday + yesterdayfrom2days + _2daysfrom3days + _3daysfrom4days + _4daysfrom5days) / 5) * 2000;
+                            if (amount >= 10000 || amount <= -10000)
+                            {
+                                amount = amount / 1000;
+                                fivedays = new Label(String.Format("{0:n0}", amount) + "K " + type.Key);
+                            }
+                            else
+                            {
+                                fivedays = new Label(String.Format("{0:n0}", amount) + " " + type.Key);
+                            }
+                        }
+
+                        horizontalRowItems = new List<(IItem, int)>();
+
+                        horizontalRowItems.Add((icon, 64));
+                        horizontalRowItems.Add((yesterday, 200));
+                        horizontalRowItems.Add((fivedays, 300));
+                        horizontalRowItems.Add((removeButton, 75));
+                        horizontalRow = new HorizontalRow(horizontalRowItems);
+                        ProductionUI.Items.Add(horizontalRow);
+                    }
                 }
             }
 
